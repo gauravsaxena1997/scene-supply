@@ -31,13 +31,18 @@ function normalized(provider, type, record) {
     width: record.width || record.imageWidth || record.max_width || null,
     height: record.height || record.imageHeight || record.max_height || null,
     duration: record.duration == null ? null : Number(record.duration),
+    aiGenerated: typeof record.aiGenerated === 'boolean' ? record.aiGenerated : null,
     licensePage: LICENSES[provider],
   };
 }
 
 function publicCoverrPage(record) {
   const candidate = record.canonical_url || record.url;
-  if (typeof candidate !== 'string') return null;
+  if (typeof candidate !== 'string') {
+    return typeof record.slug === 'string' && /^[a-z0-9-]+$/.test(record.slug)
+      ? `https://coverr.co/videos/${record.slug}`
+      : null;
+  }
   try {
     const url = safeHttpsUrl(candidate);
     if (!['coverr.co', 'www.coverr.co'].includes(url.hostname)) return null;
@@ -84,6 +89,7 @@ async function coverrSearch(query, type, limit, key) {
     ...item,
     creator: item.creator?.name || item.author?.name || null,
     sourcePage: publicCoverrPage(item),
+    aiGenerated: item.is_ai_generated,
   }));
 }
 
@@ -169,6 +175,7 @@ export async function downloadStock(item, destinationDir) {
     providerId: String(item.id),
     sourcePage: item.sourcePage,
     creator: item.creator,
+    aiGenerated: item.aiGenerated ?? null,
     licensePage: LICENSES[item.provider],
     downloadedAt: new Date().toISOString(),
     file: basename,
