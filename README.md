@@ -59,6 +59,8 @@ scenesupply components fetch magicui meteors --out ./component-references
 
 The Tailark integration uses its free OSS registry. Quartz is plan gated and is not bundled. Magic UI Pro templates are also outside the public registry. Cult UI catalog and item retrieval use its public GitHub repository because its website may rate limit automated requests. [Tailark setup](https://tailark.com/docs), [Cult UI MCP/registry](https://www.cult-ui.com/docs/mcp-server), [KokonutUI MCP/registry](https://kokonutui.com/docs/mcp), [Eldora UI MCP](https://www.eldoraui.site/docs/mcp), [Magic UI MCP](https://magicui.design/docs/mcp)
 
+If you have a Tailark Quartz plan, run `scenesupply auth set tailark-quartz` once and search it explicitly with `--source tailark-quartz`. SceneSupply sends the key in Tailark's documented `x-api-key` header. It never saves paid component source in this public repository. Quartz is excluded from the default `all` search because access is optional.
+
 ## Use from an agent
 
 From any local project, ask your agent to call the `scenesupply` CLI. For example:

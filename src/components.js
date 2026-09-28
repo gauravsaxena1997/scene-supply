@@ -1,6 +1,7 @@
 import {mkdir, writeFile} from 'node:fs/promises';
 import {join, resolve} from 'node:path';
 import {getJson} from './http.js';
+import {getCredential} from './config.js';
 
 export const COMPONENT_SOURCES = {
   tailark: {
@@ -8,6 +9,13 @@ export const COMPONENT_SOURCES = {
     item: 'https://oss.tailark.com/r/{name}.json',
     homepage: 'https://tailark.com/blocks',
     access: 'free OSS kits; Quartz requires a separate Tailark plan',
+  },
+  'tailark-quartz': {
+    catalog: 'https://tailark.com/r/registry.json',
+    item: 'https://tailark.com/r/{name}.json',
+    homepage: 'https://tailark.com/blocks/quartz',
+    access: 'requires a Tailark plan and API key',
+    credential: 'tailark-quartz',
   },
   eldora: {
     catalog: 'https://www.eldoraui.site/r/registry.json',
@@ -41,12 +49,20 @@ function sourceFor(name) {
   return source;
 }
 
-export async function searchComponents({query, sources = Object.keys(COMPONENT_SOURCES), limit = 20}) {
+async function sourceHeaders(source) {
+  if (!source.credential) return {};
+  const key = await getCredential(source.credential);
+  if (!key) throw new Error(`Source requires a key; run scenesupply auth set ${source.credential}`);
+  return {'x-api-key': key};
+}
+
+export async function searchComponents({query, sources = Object.keys(COMPONENT_SOURCES).filter(name => name !== 'tailark-quartz'), limit = 20}) {
   if (!query || typeof query !== 'string') throw new Error('A search query is required');
   if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new Error('Limit must be between 1 and 100');
   sources.forEach(sourceFor);
   const settled = await Promise.allSettled(sources.map(async name => {
-    const catalog = await getJson(sourceFor(name).catalog);
+    const source = sourceFor(name);
+    const catalog = await getJson(source.catalog, await sourceHeaders(source));
     if (!Array.isArray(catalog.items)) throw new Error('Registry returned an unsupported catalog');
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
     return catalog.items.filter(item => {
@@ -73,7 +89,7 @@ export async function searchComponents({query, sources = Object.keys(COMPONENT_S
 export async function inspectComponent(sourceName, name) {
   const source = sourceFor(sourceName);
   if (!/^[a-zA-Z0-9][a-zA-Z0-9-]*$/.test(name)) throw new Error('Invalid component name');
-  const item = await getJson(source.item.replace('{name}', name));
+  const item = await getJson(source.item.replace('{name}', name), await sourceHeaders(source));
   if (!item || typeof item !== 'object' || !Array.isArray(item.files)) {
     throw new Error('Registry returned an unsupported component item');
   }
@@ -95,7 +111,7 @@ export async function fetchComponent(sourceName, name, destinationDir) {
   if (!destinationDir) throw new Error('An output directory is required');
   const source = sourceFor(sourceName);
   if (!/^[a-zA-Z0-9][a-zA-Z0-9-]*$/.test(name)) throw new Error('Invalid component name');
-  const item = await getJson(source.item.replace('{name}', name));
+  const item = await getJson(source.item.replace('{name}', name), await sourceHeaders(source));
   if (!item || !Array.isArray(item.files)) throw new Error('Registry returned an unsupported component item');
   const directory = resolve(destinationDir);
   await mkdir(directory, {recursive: true});

@@ -7,11 +7,11 @@ import {searchComponents, inspectComponent, fetchComponent, COMPONENT_SOURCES} f
 const usage = `SceneSupply 0.1.0
 
   scenesupply doctor
-  scenesupply auth set <pexels|pixabay|coverr>       # reads token from terminal or stdin
+  scenesupply auth set <pexels|pixabay|coverr|tailark-quartz> # reads token from terminal or stdin
   scenesupply stock search <image|video> <query> [--provider all|pexels|pixabay|coverr] [--limit N] [--out results.json]
   scenesupply stock download <results.json> <1-based-index> --out <directory>
   scenesupply components sources
-  scenesupply components search <query> [--source all|tailark|eldora|cult|kokonut|magicui] [--limit N] [--out results.json]
+  scenesupply components search <query> [--source all|tailark|tailark-quartz|eldora|cult|kokonut|magicui] [--limit N] [--out results.json]
   scenesupply components inspect <source> <name>
   scenesupply components fetch <source> <name> --out <directory>
 
@@ -104,7 +104,10 @@ async function main(args) {
   }
   if (group === 'components' && action === 'sources') return output(COMPONENT_SOURCES);
   if (group === 'components' && action === 'search') {
-    const sources = listOption(option(rest, '--source', 'all'), Object.keys(COMPONENT_SOURCES));
+    const selected = option(rest, '--source', 'all');
+    const sources = selected === 'all'
+      ? Object.keys(COMPONENT_SOURCES).filter(name => name !== 'tailark-quartz')
+      : listOption(selected, Object.keys(COMPONENT_SOURCES));
     const result = await searchComponents({query: rest[0], sources, limit: Number(option(rest, '--limit', '20'))});
     await output(result, option(rest, '--out', null));
     if (Object.keys(result.errors).length && !result.results.length) process.exitCode = 2;
