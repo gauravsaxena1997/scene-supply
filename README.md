@@ -2,7 +2,7 @@
 
 SceneSupply is a local, project-agnostic source layer for video work. It searches stock media from Pexels, Pixabay, and Coverr; downloads selected assets with provenance; and searches and fetches React component registry items from Tailark, Eldora UI, Cult UI, KokonutUI, and Magic UI. It does not impose a brand, narrator, video template, or editor.
 
-This is an early CLI and JavaScript package. It does not generate complete videos or install web components into a Remotion project.
+This is an early CLI, JavaScript package, and local MCP server. It does not generate complete videos or install web components into a Remotion project.
 
 ## Requirements
 
@@ -20,6 +20,14 @@ scenesupply doctor
 ```
 
 `npm link` makes `scenesupply` available in any terminal project on that machine. You may also import the package from JavaScript. No project-specific configuration is required.
+
+For Codex, register its MCP server once at user level:
+
+```sh
+codex mcp add scenesupply -- scenesupply-mcp
+```
+
+The server offers `source_status`, `search_stock`, `download_stock`, `search_components`, `inspect_component`, and `fetch_component`. It uses the same user-level credentials as the CLI, so each consuming project needs no separate key setup. Asset and component files are written only to the destination directory supplied to a download or fetch call.
 
 ## Configure once
 

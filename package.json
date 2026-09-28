@@ -3,13 +3,26 @@
   "version": "0.1.0",
   "description": "Source stock media and React component references for video projects",
   "type": "module",
-  "bin": {"scenesupply": "./src/cli.js"},
+  "bin": {
+    "scenesupply": "./src/cli.js",
+    "scenesupply-mcp": "./src/mcp.js"
+  },
   "exports": {
     ".": "./src/index.js",
     "./stock": "./src/stock.js",
     "./components": "./src/components.js"
   },
-  "engines": {"node": ">=20"},
+  "engines": {
+    "node": ">=20"
+  },
   "license": "MIT",
-  "files": ["src", "README.md", "LICENSE"]
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.1.0",
+    "zod": "^4.6.5"
+  }
 }
