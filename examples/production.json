@@ -1,0 +1,7 @@
+{
+  "ltx": {
+    "command": "/absolute/path/to/your-ltx-wrapper",
+    "args": [],
+    "timeoutSeconds": 1800
+  }
+}

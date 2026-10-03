@@ -1,0 +1,9 @@
+{
+  "path": "assets/images/summit.png",
+  "mediaType": "image",
+  "provenance": {
+    "provider": "chatgpt_imagegen",
+    "rightsStatus": "review-required",
+    "notes": "Generated from the summit-image prompt with the channel's approved style."
+  }
+}

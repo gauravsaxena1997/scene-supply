@@ -1,7 +1,7 @@
 {
   "name": "scenesupply",
-  "version": "0.1.0",
-  "description": "Source stock media and React component references for video projects",
+  "version": "0.2.0",
+  "description": "Plan video visuals and produce provenance-tracked assets across independent projects",
   "type": "module",
   "bin": {
     "scenesupply": "./src/cli.js",
@@ -10,7 +10,9 @@
   "exports": {
     ".": "./src/index.js",
     "./stock": "./src/stock.js",
-    "./components": "./src/components.js"
+    "./components": "./src/components.js",
+    "./workflow": "./src/workflow.js",
+    "./schemas": "./src/schemas.js"
   },
   "engines": {
     "node": ">=20"
@@ -18,6 +20,9 @@
   "license": "MIT",
   "files": [
     "src",
+    "schemas",
+    "knowledge",
+    "examples",
     "README.md",
     "LICENSE"
   ],

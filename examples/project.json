@@ -1,0 +1,11 @@
+{
+  "guidanceFiles": ["brand-guidelines.md"],
+  "allowedAtoms": ["stock_image", "stock_video", "generated_image", "generated_video", "custom_component", "source_evidence", "provided_media", "image_sequence"],
+  "composition": {
+    "mode": "channel_default",
+    "measurement": "primary_visual_duration",
+    "targets": {"generated_image": 100},
+    "tolerancePercentagePoints": 5
+  },
+  "styles": {}
+}
