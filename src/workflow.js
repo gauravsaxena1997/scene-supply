@@ -4,10 +4,11 @@ import {randomUUID} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {homedir} from 'node:os';
 import {draftSchema, planSchema, assetSchema, getSchemas, ATOM_TYPES} from './schemas.js';
-import {projectPath, readProjectContext, readKnowledge, scriptDocument, fileMetadata} from './project.js';
+import {projectPath, readKnowledge, scriptDocument, fileMetadata} from './project.js';
 import {credentialStatus} from './config.js';
 import {searchStock, downloadStock} from './stock.js';
 import {COMPONENT_SOURCES} from './components.js';
+import {planningInputs, checkPlanningInputs, transcriptScript} from './planning-inputs.js';
 import {produceNarration} from './narration.js';
 
 const relativeFile = (root, file) => relative(root, file).split('\\').join('/');
@@ -58,16 +59,15 @@ export async function sourceStatus() {
   };
 }
 
-export async function planVisuals({projectDir, scriptPath, script, draft, output = 'visual-plan.json', composition, automatic = false, resolvedStyles, allowGenericStyle = false}) {
-  if (script == null && !scriptPath) throw new Error('Provide script text or a project-relative scriptPath');
-  const context = await readProjectContext(projectDir);
-  const text = script ?? await readFile(await projectPath(context.root, scriptPath, true), 'utf8');
-  const document = scriptDocument(text);
+export async function planVisuals({projectDir, scriptPath, script, draft, output = 'visual-plan.json', composition, automatic = false, resolvedStyles, allowGenericStyle = false, transcriptPath, checksFile}) {
+  if (script == null && !scriptPath && !transcriptPath) throw new Error('Provide script text, a project-relative scriptPath, or transcriptPath');
+  const {context, checks, transcript, transcriptRef} = await planningInputs(projectDir, {checksFile, transcriptPath});
+  const document = transcript ? transcriptScript(transcript) : scriptDocument(script ?? await readFile(await projectPath(context.root, scriptPath, true), 'utf8'));
   const requested = composition || context.config.composition;
   const brief = {
     status: !requested && !automatic ? 'needs_composition' : 'needs_creative_plan',
     project: {allowedAtoms: context.config.allowedAtoms, guidance: context.guidance, styles: context.config.styles, narrator: context.config.narrator},
-    script: document, composition: requested || {mode: 'automatic'},
+    script: document, transcript, checks, composition: requested || {mode: 'automatic'},
     compositionOrigin: composition ? 'user' : context.config.composition ? 'channel' : automatic ? 'user_authorized_automatic' : 'missing',
     warnings: context.warnings, knowledge: await readKnowledge(), draftSchema: getSchemas().draft,
     nextAction: !requested && !automatic ? 'Ask for a composition or permission to choose it. Do not save an invented plan.' : 'Agent creates shot decisions using this brief, then calls plan again with draft. Saving does not produce assets.',
@@ -83,7 +83,7 @@ export async function planVisuals({projectDir, scriptPath, script, draft, output
   parsed.composition = requested ? {...requested, measurement: 'primary_visual_duration', tolerancePercentagePoints: requested.tolerancePercentagePoints ?? 5} : parsed.composition;
   if (!requested && parsed.composition.mode !== 'automatic') throw new Error('Automatically chosen composition must use automatic mode');
   const now = new Date().toISOString();
-  const plan = planSchema.parse({...parsed, schemaVersion: '1.0', revision: 1, status: 'planned', createdAt: now, updatedAt: now, project: {root: '.', ...brief.project, styles: resolvedStyles || brief.project.styles}, script: document, assets: {}, production: {}});
+  const plan = planSchema.parse({...parsed, transcript: transcriptRef, checksFile, schemaVersion: '1.0', revision: 1, status: 'planned', createdAt: now, updatedAt: now, project: {root: '.', ...brief.project, styles: resolvedStyles || brief.project.styles}, script: document, assets: {}, production: {}});
   const report = await validateDocument(plan, context.root);
   if (report.errors.length) throw new Error(`Invalid plan: ${JSON.stringify(report.errors)}`);
   // Store at project root so every relative asset path has one stable base.
@@ -95,6 +95,10 @@ export async function planVisuals({projectDir, scriptPath, script, draft, output
 
 async function validateDocument(plan, root) {
   const errors = [], pending = [], warnings = [];
+  try {
+    const inputs = await planningInputs(root, {checksFile: plan.checksFile, transcriptPath: plan.transcript?.path});
+    errors.push(...checkPlanningInputs(plan, inputs, plan.edit ? frameRanges(plan) : []));
+  } catch (error) { errors.push({code: 'planning_input', message: error.message}); }
   const atoms = new Map(), shots = new Set(), cues = new Set();
   const add = (list, code, message) => list.push({code, message});
   for (const atom of plan.atoms) {
@@ -261,6 +265,8 @@ export async function prepareAssembly({planPath}) {
   if (!plan.edit) throw new Error('Add an edit configuration before preparing assembly');
   const validation = await validateDocument(plan, root);
   if (!validation.valid) throw new Error('Fix the plan errors before preparing assembly: ' + JSON.stringify(validation.errors));
+  const {checks} = await planningInputs(root, {checksFile: plan.checksFile});
+  if (checks.requireReviewedTranscript && plan.timingBasis !== 'aligned') throw new Error('Align the plan to the reviewed transcript before assembly');
   const {fps, width, height, audio, actions} = plan.edit;
   const ranges = frameRanges(plan);
   const used = usedAtoms(plan);
@@ -273,7 +279,7 @@ export async function prepareAssembly({planPath}) {
       motion: {...shot.motion, keyframes: shot.motion.keyframes.map(keyframe => ({...keyframe, frame: ranges[index].startFrame + Math.round(keyframe.offsetSeconds * fps)}))},
     })),
     captions: plan.captionCues.map(cue => ({...cue, startFrame: Math.round(cue.startSeconds * fps), endFrame: Math.round(cue.endSeconds * fps)})),
-    audio, actions,
+    audio, actions, transcript: plan.transcript,
     assets: Object.fromEntries(Object.entries(plan.assets).filter(([id]) => used.has(id))),
   };
 }
@@ -308,16 +314,21 @@ function taskFor(atom, plan, root) {
 export async function nextProductionTasks(planPath, shotIds) {
   const {plan, root} = await loadPlan(planPath);
   const selected = selectedAtoms(plan, shotIds);
+  const inputs = await planningInputs(root, {checksFile: plan.checksFile, transcriptPath: plan.transcript?.path});
+  const planningErrors = checkPlanningInputs(plan, inputs, plan.edit ? frameRanges(plan) : []);
   const tasks = [], blocked = [];
   for (const atom of plan.atoms.filter(atom => selected.has(atom.id) && !plan.assets[atom.id])) {
     const missing = dependencies(atom).filter(id => !plan.assets[id]);
-    if (missing.length) blocked.push({atomId: atom.id, dependsOn: missing});
+    if (planningErrors.length || (inputs.checks.requireReviewedTranscript && plan.timingBasis !== 'aligned' && atom.type !== 'narration')) {
+      blocked.push({atomId: atom.id, reason: planningErrors.length ? planningErrors : 'Align the visual plan to the reviewed narration first.'});
+    }
+    else if (missing.length) blocked.push({atomId: atom.id, dependsOn: missing});
     else tasks.push({...taskFor(atom, plan, root), ...(plan.production[atom.id]?.task || {})});
   }
   return {revision: plan.revision, tasks, blocked};
 }
 
-export async function revisePlan({planPath, draft, expectedRevision, invalidateAtomIds = []}) {
+export async function revisePlan({planPath, draft, expectedRevision, invalidateAtomIds = [], transcriptPath, checksFile}) {
   return locked(planPath, async () => {
     const {plan, root, file} = await loadPlan(planPath), previous = structuredClone(plan);
     if (expectedRevision !== plan.revision) throw new Error('Plan revision changed; reload before revising');
@@ -336,6 +347,11 @@ export async function revisePlan({planPath, draft, expectedRevision, invalidateA
       if (invalidated.has(id)) { delete plan.assets[id]; delete plan.production[id]; }
     }
     if (!next.edit) delete plan.edit;
+    const inputs = await planningInputs(root, {checksFile: checksFile ?? plan.checksFile, transcriptPath: transcriptPath ?? plan.transcript?.path});
+    plan.project.guidance = inputs.context.guidance;
+    plan.transcript = inputs.transcriptRef;
+    if (inputs.transcript) plan.script = transcriptScript(inputs.transcript);
+    plan.checksFile = checksFile ?? plan.checksFile;
     Object.assign(plan, next);
     const report = await validateDocument(plan, root);
     if (report.errors.length) throw new Error(`Invalid revision: ${JSON.stringify(report.errors)}`);
@@ -442,10 +458,15 @@ export async function produce({planPath, shotIds, selections = {}, narrationUse}
     const validation = await validateDocument(plan, root);
     if (validation.errors.length) throw new Error(`Fix plan errors before production: ${JSON.stringify(validation.errors)}`);
     const selected = selectedAtoms(plan, shotIds), ltx = await ltxConfig();
+    const {checks} = await planningInputs(root, {checksFile: plan.checksFile, transcriptPath: plan.transcript?.path});
     const completed = [], tasks = [], blocked = [], failures = [];
     for (const atom of plan.atoms.filter(atom => selected.has(atom.id) && !plan.assets[atom.id])) {
       const missing = dependencies(atom).filter(id => !plan.assets[id]);
       if (missing.length) { blocked.push({atomId: atom.id, dependsOn: missing}); continue; }
+      if (checks.requireReviewedTranscript && plan.timingBasis !== 'aligned' && atom.type !== 'narration') {
+        blocked.push({atomId: atom.id, reason: 'Align the visual plan to the reviewed narration first.'});
+        continue;
+      }
       const task = taskFor(atom, plan, root);
       try {
         const directory = await projectPath(root, `assets/scenesupply/${atom.id}`);

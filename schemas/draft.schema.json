@@ -756,6 +756,45 @@
             "type": "number",
             "exclusiveMinimum": 0
           },
+          "compositionId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]*$"
+          },
+          "speechAnchor": {
+            "type": "object",
+            "properties": {
+              "sentenceId": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]*$"
+              },
+              "wordIndex": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "edge": {
+                "default": "start",
+                "type": "string",
+                "enum": [
+                  "start",
+                  "end"
+                ]
+              },
+              "offsetFrames": {
+                "default": 0,
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "sentenceId",
+              "wordIndex",
+              "edge",
+              "offsetFrames"
+            ],
+            "additionalProperties": false
+          },
           "purpose": {
             "type": "string",
             "minLength": 1
@@ -795,6 +834,41 @@
                     "offsetSeconds": {
                       "type": "number",
                       "minimum": 0
+                    },
+                    "speechAnchor": {
+                      "type": "object",
+                      "properties": {
+                        "sentenceId": {
+                          "type": "string",
+                          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]*$"
+                        },
+                        "wordIndex": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "edge": {
+                          "default": "start",
+                          "type": "string",
+                          "enum": [
+                            "start",
+                            "end"
+                          ]
+                        },
+                        "offsetFrames": {
+                          "default": 0,
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "sentenceId",
+                        "wordIndex",
+                        "edge",
+                        "offsetFrames"
+                      ],
+                      "additionalProperties": false
                     },
                     "values": {
                       "type": "object",
@@ -1127,6 +1201,41 @@
               "target": {
                 "type": "string",
                 "minLength": 1
+              },
+              "speechAnchor": {
+                "type": "object",
+                "properties": {
+                  "sentenceId": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]*$"
+                  },
+                  "wordIndex": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "edge": {
+                    "default": "start",
+                    "type": "string",
+                    "enum": [
+                      "start",
+                      "end"
+                    ]
+                  },
+                  "offsetFrames": {
+                    "default": 0,
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "sentenceId",
+                  "wordIndex",
+                  "edge",
+                  "offsetFrames"
+                ],
+                "additionalProperties": false
               },
               "audioCueId": {
                 "type": "string",

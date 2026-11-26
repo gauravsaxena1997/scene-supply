@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "audioPath": {
+      "type": "string",
+      "minLength": 1
+    },
+    "audioSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "sentences": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]*$"
+          },
+          "words": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "text": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "startSeconds": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "endSeconds": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              },
+              "required": [
+                "text",
+                "startSeconds",
+                "endSeconds"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "id",
+          "words"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "audioPath",
+    "audioSha256",
+    "sentences"
+  ],
+  "additionalProperties": false
+}
