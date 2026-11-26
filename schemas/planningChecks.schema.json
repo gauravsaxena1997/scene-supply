@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "maxCompositionSeconds": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "requireReviewedTranscript": {
+      "default": false,
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "requireReviewedTranscript"
+  ],
+  "additionalProperties": false
+}

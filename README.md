@@ -207,3 +207,19 @@ See the [shared production SOP](knowledge/planning-and-production.md) and [agent
 ## Reference and licences
 
 The stock search pattern was informed by [MoneyPrinterTurbo](https://github.com/harry0703/MoneyPrinterTurbo). SceneSupply implements its own adapters and does not include MoneyPrinterTurbo's video editor. Its code licence does not grant rights to third-party media. Component registry items remain governed by their own licences and terms. SceneSupply's original code is MIT licensed.
+
+### Plan from a reviewed voiceover
+
+Transcribe the recorded take once, outside SceneSupply. Save the raw recognizer output for review, then provide a project-relative JSON file with `audioPath`, `audioSha256`, and `sentences`. Each sentence has an `id` and ordered `words` with `text`, `startSeconds`, and `endSeconds` relative to the source take. The [transcript schema](schemas/transcript.schema.json) defines the format.
+
+```sh
+scenesupply plan --project ./my-project --transcript transcripts/reel.json --automatic
+scenesupply plan --project ./my-project --transcript transcripts/reel.json --automatic --draft draft.json
+scenesupply validate-plan --plan ./my-project/visual-plan.json
+```
+
+The transcript supplies the canonical sentence and word IDs for script coverage. Put the take on the edit timeline as narration. Anchor a cut, camera keyframe, caption boundary or contact action with `sentenceId`, zero-based `wordIndex`, `edge` and any intentional `offsetFrames`. SceneSupply resolves the anchor through the narration cue's source trim and timeline placement and checks the declared frame. Attach a click cue to the contact action so its frame is checked separately. Revise with the new transcript when the voice changes.
+
+The configured `personalizationFile` is loaded by default. A project can include `planningChecks` in that JSON alongside its feedback cases. The [checks schema](schemas/planningChecks.schema.json) supports `maxCompositionSeconds` and `requireReviewedTranscript`. With a hold limit, assign a `compositionId` to each shot and reuse it across adjacent shots with the same staging. A per-run `--checks` option selects a different project-relative file. MCP `plan` and `revise_plan` accept `transcriptPath` and `checksFile`. The saved plan records the input hashes. Use a project-specific checks file for an intentional non-narrated format.
+
+Planning validation checks the declared timing and composition. The consuming project owns render inspection, actual visual classification, listening and release approval.

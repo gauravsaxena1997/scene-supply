@@ -17,11 +17,11 @@ const usage = `SceneSupply 0.3.0
   scenesupply guidance
   scenesupply schemas [--out schemas.json]
   scenesupply context --project <directory>
-  scenesupply plan --project <directory> --script <project-relative-script> [--draft draft.json] [--composition composition.json | --automatic] [--styles styles.json] [--allow-generic-style] [--out visual-plan.json]
+  scenesupply plan --project <directory> (--script <project-relative-script> | --transcript project-relative.json) [--draft draft.json] [--checks project-relative.json] [--composition composition.json | --automatic] [--styles styles.json] [--allow-generic-style] [--out visual-plan.json]
   scenesupply produce --plan <visual-plan.json> [--shots id,id] [--selections selections.json] [--narration-use commercial|noncommercial]
   scenesupply next-production-tasks --plan <visual-plan.json> [--shots id,id]
   scenesupply attach-asset --plan <visual-plan.json> --atom <id> --asset asset.json [--source-file <path>] [--shot-updates updates.json] [--revision N]
-  scenesupply revise-plan --plan <visual-plan.json> --draft draft.json --revision N [--invalidate id,id]
+  scenesupply revise-plan --plan <visual-plan.json> --draft draft.json --revision N [--invalidate id,id] [--transcript project-relative.json] [--checks project-relative.json]
   scenesupply validate-plan --plan <visual-plan.json>
   scenesupply inspect-plan --plan <visual-plan.json>
   scenesupply auth set <pexels|pixabay|coverr|tailark-quartz|elevenlabs> # reads token from terminal or stdin
@@ -102,7 +102,7 @@ async function main(args) {
   if (group === 'guidance') return output({knowledge: await readKnowledge()});
   if (group === 'schemas') return output(getSchemas(), option(args, '--out', null));
   if (group === 'context') return output(await readProjectContext(required('--project')));
-  if (group === 'plan') return output(await planVisuals({projectDir: required('--project'), scriptPath: required('--script'), draft: await jsonOption('--draft'), composition: await jsonOption('--composition'), automatic: args.includes('--automatic'), allowGenericStyle: args.includes('--allow-generic-style'), resolvedStyles: await jsonOption('--styles'), output: option(args, '--out', 'visual-plan.json')}));
+  if (group === 'plan') return output(await planVisuals({projectDir: required('--project'), scriptPath: option(args, '--script'), draft: await jsonOption('--draft'), transcriptPath: option(args, '--transcript'), checksFile: option(args, '--checks'), composition: await jsonOption('--composition'), automatic: args.includes('--automatic'), allowGenericStyle: args.includes('--allow-generic-style'), resolvedStyles: await jsonOption('--styles'), output: option(args, '--out', 'visual-plan.json')}));
   if (group === 'produce') {
     const narrationUse = option(args, '--narration-use', undefined);
     if (narrationUse && !['commercial', 'noncommercial'].includes(narrationUse)) throw new Error('Choose commercial or noncommercial narration use');
@@ -111,7 +111,7 @@ async function main(args) {
   }
   if (group === 'next-production-tasks') return output(await nextProductionTasks(required('--plan'), shotIds));
   if (group === 'attach-asset') return output(await attachAsset({planPath: required('--plan'), atomId: required('--atom'), asset: await jsonOption('--asset'), sourceFile: option(args, '--source-file', undefined), shotUpdates: await jsonOption('--shot-updates'), expectedRevision: option(args, '--revision', null) ? Number(option(args, '--revision')) : undefined}));
-  if (group === 'revise-plan') return output(await revisePlan({planPath: required('--plan'), draft: await jsonOption('--draft'), expectedRevision: Number(required('--revision')), invalidateAtomIds: option(args, '--invalidate', '').split(',').filter(Boolean)}));
+  if (group === 'revise-plan') return output(await revisePlan({planPath: required('--plan'), draft: await jsonOption('--draft'), expectedRevision: Number(required('--revision')), transcriptPath: option(args, '--transcript'), checksFile: option(args, '--checks'), invalidateAtomIds: option(args, '--invalidate', '').split(',').filter(Boolean)}));
   if (group === 'validate-plan') {
     const result = await validatePlan(required('--plan')); await output(result); if (!result.valid) process.exitCode = 2; return;
   }

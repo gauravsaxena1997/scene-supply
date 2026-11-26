@@ -41,7 +41,7 @@ function createServer() {
     args => readProjectContext(args.projectDir));
   register(server, 'plan', 'Prepare a script/channel planning brief. With draft, validate and save visual-plan.json. Ask if composition is missing unless automatic=true. No assets generated.', z.object({
     projectDir: z.string().min(1), scriptPath: z.string().optional(), script: z.string().optional(),
-    draft: draftSchema.optional(), output: z.string().default('visual-plan.json'), composition: compositionSchema.optional(), automatic: z.boolean().default(false), allowGenericStyle: z.boolean().default(false), resolvedStyles: z.record(z.string(), z.json()).optional(),
+    transcriptPath: z.string().optional(), checksFile: z.string().optional(), draft: draftSchema.optional(), output: z.string().default('visual-plan.json'), composition: compositionSchema.optional(), automatic: z.boolean().default(false), allowGenericStyle: z.boolean().default(false), resolvedStyles: z.record(z.string(), z.json()).optional(),
   }), planVisuals, false);
   register(server, 'produce', 'Checkpoint production: download explicitly selected stock, attach provided media, build image sequences, run configured LTX adapter, or synthesize narration only with explicit narrationUse. Return agent tasks for ChatGPT images, component coding, evidence capture and stock selection. Resume skips attached assets. Does not render.', z.object({
     planPath: z.string().min(1), narrationUse: z.enum(['commercial', 'noncommercial']).optional(), shotIds: z.array(z.string()).optional(), selections: z.record(z.string(), z.object({provider: z.enum(STOCK_PROVIDERS), type: z.enum(['image', 'video']), id: z.string(), sourcePage: z.string().url().nullable().optional(), creator: z.string().nullable().optional(), duration: z.number().positive().nullable().optional()})).default({}),
@@ -52,7 +52,7 @@ function createServer() {
     shotUpdates: z.array(z.object({id: z.string(), playback: playbackSchema.optional(), placements: z.array(z.object({annotationId: z.string(), placement: z.record(z.string(), z.json())})).optional()})).default([]),
   }), attachAsset, false);
   register(server, 'revise_plan', 'Save explicit creative/timing/placement revisions against an expected revision. Invalidate changed attached atoms explicitly; dependent generated assets are also invalidated. Preserve history.', z.object({
-    planPath: z.string().min(1), draft: draftSchema, expectedRevision: z.number().int().positive(), invalidateAtomIds: z.array(z.string()).default([]),
+    planPath: z.string().min(1), transcriptPath: z.string().optional(), checksFile: z.string().optional(), draft: draftSchema, expectedRevision: z.number().int().positive(), invalidateAtomIds: z.array(z.string()).default([]),
   }), revisePlan, false);
   register(server, 'validate_plan', 'Check schema, transcript coverage/order, composition, dependencies, asset hashes, trims and assembly readiness. Does not render or certify visual quality.', z.object({planPath: z.string().min(1)}), args => validatePlan(args.planPath));
   register(server, 'inspect_plan', 'Summarize shots, timing, assets, production progress and unresolved decisions.', z.object({planPath: z.string().min(1)}), args => inspectPlan(args.planPath));

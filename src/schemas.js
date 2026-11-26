@@ -14,6 +14,22 @@ export const compositionSchema = z.object({
   tolerancePercentagePoints: z.number().min(0).max(100).default(5),
 }).strict().refine(value => Math.abs(Object.values(value.targets).reduce((a, b) => a + b, 0) - 100) < 0.001, 'Composition targets must sum to 100');
 
+const sha256 = z.string().regex(/^[a-f0-9]{64}$/);
+const word = z.object({text: z.string().min(1), startSeconds: z.number().nonnegative(), endSeconds: z.number().positive()}).strict();
+export const transcriptSchema = z.object({
+  audioPath: relativePath, audioSha256: sha256,
+  sentences: z.array(z.object({id, words: z.array(word).min(1)}).strict()).min(1),
+}).strict();
+export const planningChecksSchema = z.object({
+  maxCompositionSeconds: z.number().positive().optional(),
+  requireReviewedTranscript: z.boolean().default(false),
+}).strict();
+const speechAnchor = z.object({
+  sentenceId: id, wordIndex: z.number().int().nonnegative(),
+  edge: z.enum(['start', 'end']).default('start'),
+  offsetFrames: z.number().int().default(0),
+}).strict();
+
 export const projectConfigSchema = z.object({
   guidanceFiles: z.array(relativePath).default([]),
   allowedAtoms: z.array(z.enum(ATOM_TYPES)).min(1).default(ATOM_TYPES),
@@ -27,7 +43,7 @@ export const motionSchema = z.object({
   type: z.enum(['none', 'pan', 'zoom_in', 'zoom_out', 'focus', 'sequence', 'custom']),
   description: z.string().min(1),
   target: z.string().optional(),
-  keyframes: z.array(z.object({offsetSeconds: z.number().nonnegative(), values: jsonObject}).strict()).default([]),
+  keyframes: z.array(z.object({offsetSeconds: z.number().nonnegative(), speechAnchor: speechAnchor.optional(), values: jsonObject}).strict()).default([]),
 }).strict();
 
 const stockSelection = z.object({provider: z.enum(['pexels', 'pixabay', 'coverr']), type: z.enum(['image', 'video']), id: z.string().min(1), sourcePage: z.string().url().nullable().optional(), creator: z.string().nullable().optional(), duration: z.number().positive().nullable().optional()}).strict();
@@ -61,6 +77,7 @@ export const shotSchema = z.object({
   id,
   scriptSpan: z.object({segmentId: id, startWord: z.number().int().nonnegative(), endWordExclusive: z.number().int().positive(), text: z.string().min(1)}).strict(),
   durationSeconds: z.number().positive(),
+  compositionId: id.optional(), speechAnchor: speechAnchor.optional(),
   purpose: z.string().min(1), primaryAtomId: id,
   motion: motionSchema,
   framing: z.string().min(1),
@@ -82,7 +99,7 @@ export const editSchema = z.object({
   }).strict()).default([]),
   actions: z.array(z.object({
     id, shotId: id, frame: z.number().int().nonnegative(), kind: z.enum(['tap', 'type', 'reveal', 'confirm', 'hold', 'custom']),
-    target: z.string().min(1), audioCueId: id.optional(),
+    target: z.string().min(1), speechAnchor: speechAnchor.optional(), audioCueId: id.optional(),
   }).strict()).default([]),
 }).strict();
 
@@ -100,11 +117,13 @@ export const planSchema = draftSchema.safeExtend({
   status: z.enum(['planned', 'in_production', 'assets_ready', 'assembly_ready']),
   createdAt: z.string(), updatedAt: z.string(),
   project: z.object({root: z.literal('.'), allowedAtoms: z.array(z.enum(ATOM_TYPES)), guidance: z.array(z.object({path: relativePath, sha256: z.string(), content: z.string()}).strict()), styles: jsonObject, narrator: jsonObject.optional()}).strict(),
+  transcript: z.object({path: relativePath, sha256}).strict().optional(),
+  checksFile: relativePath.optional(),
   script: z.object({sha256: z.string(), segments: z.array(z.object({id, text: z.string(), words: z.array(z.string())}).strict())}).strict(),
   assets: z.record(id, assetSchema).default({}),
   production: z.record(id, z.object({status: z.enum(['pending', 'awaiting_agent', 'failed', 'complete']), task: jsonObject.optional(), error: z.string().optional()}).strict()).default({}),
 });
 
 export function getSchemas() {
-  return Object.fromEntries(Object.entries({project: projectConfigSchema, draft: draftSchema, plan: planSchema, asset: assetSchema, edit: editSchema}).map(([name, schema]) => [name, z.toJSONSchema(schema)]));
+  return Object.fromEntries(Object.entries({project: projectConfigSchema, draft: draftSchema, plan: planSchema, asset: assetSchema, edit: editSchema, transcript: transcriptSchema, planningChecks: planningChecksSchema}).map(([name, schema]) => [name, z.toJSONSchema(schema)]));
 }

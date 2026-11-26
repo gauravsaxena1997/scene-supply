@@ -1,14 +1,12 @@
 ---
 name: scenesupply-production
-description: Use SceneSupply MCP to plan, source, assemble, and review short-form video production across projects. Use when the user requests the shared SceneSupply workflow.
+description: Use SceneSupply to plan short-form video with project rules, reviewed narration, and explicit visual and audio cues.
 ---
 
 # SceneSupply production
 
-1. Call `get_workflow_guidance` and `read_project_context`. Those are the canonical SOP and contracts. Load the project's recorded personalization cases, creative brief, and approval scope. Keep decisions and assets with their consuming project.
-2. Plan the emotional hook, product or story proof, resolution and single CTA before selecting tools. Save the creative treatment with `plan` or `revise_plan`. Plan edit frames, narration spans, original dialogue, music and SFX explicitly. Start with one short pilot unless directed otherwise.
-3. Transcribe the selected voiceover with a language-capable recognizer and word timestamps. Review the audio, save raw and corrected transcripts, then anchor SceneSupply captions, visuals, actions and SFX to reviewed speech timing. Re-align after a voiceover change. Mark uncertain timing as estimated.
-4. For supporting video, search licensed stock through SceneSupply first when it fits the beat. Use web search for otherwise unavailable material, ChatGPT for original stills, and the authorized Flow browser for custom B-roll, silent reactions or native dialogue. Use `attach_asset` for actual provider output and source metadata.
-5. Use `produce` for dependency-ready work. ElevenLabs synthesis spends credits and requires an explicit intended use. Confirm account rights before brand audio. Use project-relative source paths and keep secrets in runtime configuration.
-6. Use `validate_plan` and `prepare_assembly` before the project's Remotion render. Treat the manifest as a handoff with pending gates. Inspect the final render at phone size and collect review feedback as scoped cases.
-7. Identify useful cross-project components and reuse or create them when needed. Plan gesture, interaction response, action SFX and directional camera movement together. When a real edit exposes a contract gap, identify the narrow reusable change, preserve older plans, and verify it in SceneSupply. Keep project choices out of global guidance.
+1. Read the SceneSupply guidance and project context. Use the configured personalization file and scoped cases. Check the real product behavior and choose the hook, product proof and single CTA.
+2. If narration exists, transcribe the actual approved take first. Otherwise write a rough storyboard and script, then record the take. Keep one raw transcript and a reviewed source-relative word map grouped by sentence. Correct the spoken text and timing against the audio.
+3. Pass the reviewed transcript and project directory to SceneSupply. Map sentence spans to shots and anchor precise cuts, camera moves and captions to words. Anchor interaction SFX to contact frames. Give adjacent shots with the same staging the same composition ID.
+4. Validate the aligned plan before visual asset production or assembly handoff. Resolve errors, identify pending assets and update affected cues when the take or creative cut changes. Keep provenance and final artifacts in the consuming project.
+5. Follow the consuming project's execution and final review checklist. SceneSupply validates the plan and emits the assembly manifest. The editor inspects the actual render and records visual and listening evidence.

@@ -30,12 +30,13 @@ async function optionalFile(path) {
   try { return await readFile(path, 'utf8'); } catch (error) { if (error.code === 'ENOENT') return null; throw error; }
 }
 
-export async function readProjectContext(projectDir) {
+export async function readProjectContext(projectDir, checksFile) {
   const root = await realpath(projectDir);
   const configText = await optionalFile(await projectPath(root, '.scenesupply/project.json'));
   const config = projectConfigSchema.parse(configText ? JSON.parse(configText) : {});
   const files = new Set(config.guidanceFiles);
-  if (config.personalizationFile) files.add(config.personalizationFile);
+  const personalizationFile = checksFile ?? config.personalizationFile;
+  if (personalizationFile) files.add(personalizationFile);
   for (const name of ['AGENTS.md', 'brand-guidelines.md', 'brand.md', 'BRAND.md', 'guidelines/brand.md']) {
     if (await optionalFile(await projectPath(root, name))) files.add(name);
   }
@@ -46,7 +47,7 @@ export async function readProjectContext(projectDir) {
     if (Buffer.byteLength(content) > 256_000) throw new Error(`Guidance file is too large: ${path}`);
     guidance.push({path, sha256: hash(content), content});
   }
-  return {root, config, guidance, warnings: guidance.length ? [] : ['No brand guidance discovered; supply guidanceFiles or explicitly authorize generic styling.']};
+  return {root, config, personalizationFile, guidance, warnings: guidance.length ? [] : ['No brand guidance discovered; supply guidanceFiles or explicitly authorize generic styling.']};
 }
 
 export function scriptDocument(text) {
