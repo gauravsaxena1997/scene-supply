@@ -5,3 +5,4 @@ node_modules/
 *.asset.json
 *.registry.json
 dist/
+.code-review-graph/

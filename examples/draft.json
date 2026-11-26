@@ -1,0 +1,42 @@
+{
+  "composition": {
+    "mode": "automatic",
+    "measurement": "primary_visual_duration",
+    "targets": {"generated_image": 100},
+    "tolerancePercentagePoints": 5
+  },
+  "timingBasis": "estimated",
+  "atoms": [
+    {
+      "id": "summit-image",
+      "type": "generated_image",
+      "description": "Wide mountain summit with the climber approaching the ridge",
+      "brandRuleRefs": [],
+      "provider": "chatgpt_imagegen",
+      "prompt": "A lone climber reaches a windswept mountain summit. Wide establishing view, climber on the right, open space at bottom for captions. Apply the consuming project's approved visual style.",
+      "referenceAtomIds": [],
+      "continuity": "Preserve the climber's clothing and appearance in subsequent shots."
+    }
+  ],
+  "shots": [
+    {
+      "id": "shot-001",
+      "scriptSpan": {
+        "segmentId": "segment-0001",
+        "startWord": 0,
+        "endWordExclusive": 10,
+        "text": "The climber reached the summit, but the hardest decision remained."
+      },
+      "durationSeconds": 6,
+      "purpose": "Establish the summit and introduce uncertainty",
+      "primaryAtomId": "summit-image",
+      "motion": {"type": "zoom_in", "description": "Slow push from the wide summit view toward the climber", "target": "climber", "keyframes": []},
+      "framing": "Start wide; end medium, preserving space for captions",
+      "annotations": [],
+      "captions": {"mode": "bottom", "text": "The climber reached the summit, but the hardest decision remained.", "cueIds": []},
+      "transition": "cut"
+    }
+  ],
+  "captionCues": [],
+  "unresolved": []
+}

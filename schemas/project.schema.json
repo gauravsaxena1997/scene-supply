@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "guidanceFiles": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "allowedAtoms": {
+      "default": [
+        "stock_image",
+        "stock_video",
+        "generated_image",
+        "generated_video",
+        "custom_component",
+        "source_evidence",
+        "provided_media",
+        "image_sequence",
+        "narration"
+      ],
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "stock_image",
+          "stock_video",
+          "generated_image",
+          "generated_video",
+          "custom_component",
+          "source_evidence",
+          "provided_media",
+          "image_sequence",
+          "narration"
+        ]
+      }
+    },
+    "composition": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "channel_default",
+            "automatic"
+          ]
+        },
+        "measurement": {
+          "default": "primary_visual_duration",
+          "type": "string",
+          "const": "primary_visual_duration"
+        },
+        "targets": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "enum": [
+              "stock_image",
+              "stock_video",
+              "generated_image",
+              "generated_video",
+              "custom_component",
+              "source_evidence",
+              "provided_media",
+              "image_sequence",
+              "narration"
+            ]
+          },
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          }
+        },
+        "tolerancePercentagePoints": {
+          "default": 5,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        }
+      },
+      "required": [
+        "mode",
+        "measurement",
+        "targets",
+        "tolerancePercentagePoints"
+      ],
+      "additionalProperties": false
+    },
+    "styles": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/__schema0"
+      }
+    },
+    "narrator": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/__schema0"
+      }
+    },
+    "personalizationFile": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "guidanceFiles",
+    "allowedAtoms",
+    "styles"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema0"
+          }
+        },
+        {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/__schema0"
+          }
+        }
+      ]
+    }
+  }
+}
