@@ -1,6 +1,6 @@
 {
   "name": "scenesupply",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Plan video visuals and produce provenance-tracked assets across independent projects",
   "type": "module",
   "bin": {
@@ -22,6 +22,7 @@
     "src",
     "schemas",
     "knowledge",
+    "skills",
     "examples",
     "README.md",
     "LICENSE"

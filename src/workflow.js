@@ -8,12 +8,14 @@ import {projectPath, readProjectContext, readKnowledge, scriptDocument, fileMeta
 import {credentialStatus} from './config.js';
 import {searchStock, downloadStock} from './stock.js';
 import {COMPONENT_SOURCES} from './components.js';
+import {produceNarration} from './narration.js';
 
 const relativeFile = (root, file) => relative(root, file).split('\\').join('/');
 const dependencies = atom => atom.referenceAtomIds || [];
 const usedAtoms = plan => {
   const ids = new Set();
   const visit = id => { if (ids.has(id)) return; ids.add(id); const atom = plan.atoms.find(a => a.id === id); if (atom) dependencies(atom).forEach(visit); };
+  for (const cue of plan.edit?.audio || []) visit(cue.atomId);
   plan.shots.forEach(shot => { visit(shot.primaryAtomId); shot.annotations.forEach(item => { if (item.atomId) visit(item.atomId); }); });
   return ids;
 };
@@ -49,7 +51,10 @@ export async function sourceStatus() {
     componentSources: Object.fromEntries(Object.entries(COMPONENT_SOURCES).map(([name, source]) => [name, {homepage: source.homepage, access: source.access, health: 'not_probed'}])),
     imageGeneration: {provider: 'chatgpt_imagegen', execution: 'agent_tool', health: 'agent_must_confirm_tool_exposure'},
     ltx: {provider: 'local_ltx_2_5', execution: ltx ? 'command_adapter' : 'agent_handoff', configured: Boolean(ltx), health: 'not_probed'},
-    remotion: {supported: false, stage: 'future'},
+    googleFlow: {execution: 'agent_browser_handoff', health: 'agent_must_confirm_session'},
+    narration: {provider: 'elevenlabs', credential: credentials.elevenlabs, execution: 'explicit_api_opt_in'},
+    remotion: {supported: false, manifestSupported: true, renderExecution: 'project_composition'},
+    webSearch: {execution: 'agent_tool'},
   };
 }
 
@@ -98,6 +103,10 @@ async function validateDocument(plan, root) {
     if (!plan.project.allowedAtoms.includes(atom.type)) add(errors, 'prohibited_atom', atom.id);
     if (atom.type === 'stock_image' && (atom.providers.includes('coverr') || atom.selection?.provider === 'coverr')) add(errors, 'coverr_image', atom.id);
     if (atom.selection && (!atom.providers.includes(atom.selection.provider) || atom.selection.type !== (atom.type === 'stock_image' ? 'image' : 'video'))) add(errors, 'invalid_selection', atom.id);
+    if (atom.type === 'generated_video') {
+      if (atom.provider === 'local_ltx_2_5' && (atom.flow || atom.durationSeconds < 3 || atom.durationSeconds > 8)) add(errors, 'invalid_ltx_intent', atom.id);
+      if (atom.provider === 'google_flow' && (!atom.flow || (atom.flow.purpose === 'spoken_dialogue') !== Boolean(atom.flow.dialogue))) add(errors, 'invalid_flow_intent', atom.id);
+    }
     if (atom.brandRuleRefs.some(ref => !ref.trim())) add(errors, 'empty_brand_reference', atom.id);
   }
   const visiting = new Set(), visited = new Set();
@@ -138,9 +147,9 @@ async function validateDocument(plan, root) {
     const atom = atoms.get(shot.primaryAtomId);
     if (!atom) add(errors, 'missing_primary_atom', shot.id);
     else {
-      if (atom.type === 'provided_media' && atom.mediaType === 'audio') add(errors, 'audio_primary_visual', shot.id);
+      if (atom.type === 'narration' || atom.type === 'provided_media' && atom.mediaType === 'audio') add(errors, 'audio_primary_visual', shot.id);
       durationByType[atom.type] += shot.durationSeconds;
-      if (atom.type === 'generated_video' && shot.durationSeconds > atom.durationSeconds) add(errors, 'generated_clip_too_short', shot.id);
+      if (atom.type === 'generated_video' && atom.provider === 'local_ltx_2_5' && shot.durationSeconds > atom.durationSeconds) add(errors, 'generated_clip_too_short', shot.id);
       if (['stock_video', 'generated_video'].includes(atom.type) || atom.type === 'provided_media' && atom.mediaType === 'video' || atom.type === 'source_evidence' && atom.capture === 'recording') {
         if (!shot.playback) add(pending, 'missing_trim', shot.id);
       }
@@ -149,6 +158,7 @@ async function validateDocument(plan, root) {
       const p = shot.playback;
       if (p.sourceOutSeconds <= p.sourceInSeconds || Math.abs((p.sourceOutSeconds - p.sourceInSeconds) / p.speed - shot.durationSeconds) > 0.05) add(errors, 'trim_duration_mismatch', shot.id);
       const duration = plan.assets[shot.primaryAtomId]?.durationSeconds;
+      if (atom?.type === 'generated_video' && atom.provider === 'google_flow' && (atom.flow?.purpose === 'spoken_dialogue') !== (p.audio === 'original')) add(errors, 'flow_audio_mode', shot.id);
       if (duration && p.sourceOutSeconds > duration + 0.05) add(errors, 'trim_outside_asset', shot.id);
     }
     if (shot.motion.keyframes.some(frame => frame.offsetSeconds > shot.durationSeconds)) add(errors, 'motion_outside_shot', shot.id);
@@ -174,6 +184,11 @@ async function validateDocument(plan, root) {
   for (const cue of plan.captionCues) if (cue.endSeconds > total + 0.05) add(errors, 'caption_outside_timeline', cue.id);
   const actual = Object.fromEntries(Object.entries(durationByType).map(([type, seconds]) => [type, total ? 100 * seconds / total : 0]));
   for (const type of ATOM_TYPES) if (Math.abs(actual[type] - (plan.composition.targets[type] || 0)) > plan.composition.tolerancePercentagePoints + 0.001) add(errors, 'composition_mismatch', `${type}: target ${plan.composition.targets[type] || 0}%, actual ${actual[type].toFixed(2)}%`);
+  if (plan.edit) {
+    const report = checkEdit(plan);
+    errors.push(...report.errors);
+    pending.push(...report.pending);
+  }
   const needed = usedAtoms(plan);
   for (const id of needed) {
     const asset = plan.assets[id];
@@ -187,13 +202,80 @@ async function validateDocument(plan, root) {
     const atom = atoms.get(id);
     if (atom?.type === 'custom_component' && !asset.component) add(errors, 'missing_component_contract', id);
     if (asset.mediaType === 'video' && !asset.durationSeconds) add(pending, 'unmeasured_duration', id);
-    if (atom?.type === 'generated_video' && (!asset.durationSeconds || asset.durationSeconds < 3 || asset.durationSeconds > 8)) add(errors, 'invalid_generated_duration', id);
+    if (atom?.type === 'generated_video' && atom.provider === 'local_ltx_2_5' && (!asset.durationSeconds || asset.durationSeconds < 3 || asset.durationSeconds > 8)) add(errors, 'invalid_generated_duration', id);
     if (asset.provenance.rightsStatus === 'review-required') add(warnings, 'rights_review_required', id);
   }
   for (const id of Object.keys(plan.assets)) if (!atoms.has(id)) add(errors, 'orphan_asset', id);
   if (plan.timingBasis !== 'aligned') add(pending, 'estimated_timing', 'Align shots and captions to narration before assembly');
   plan.unresolved.forEach(message => add(pending, 'unresolved', message));
   return {valid: !errors.length, assemblyReady: !errors.length && !pending.length, errors, pending, warnings, durationSeconds: total, composition: actual, assetsReady: [...needed].every(id => Boolean(plan.assets[id])) && !errors.length};
+}
+
+function frameRanges(plan) {
+  const fps = plan.edit.fps;
+  let seconds = 0;
+  return plan.shots.map(shot => {
+    const startFrame = Math.round(seconds * fps);
+    seconds += shot.durationSeconds;
+    return {id: shot.id, startFrame, endFrame: Math.round(seconds * fps)};
+  });
+}
+
+function checkEdit(plan) {
+  const errors = [], pending = [];
+  const shots = frameRanges(plan);
+  const endFrame = shots.at(-1).endFrame;
+  const audio = new Map();
+  const actions = new Set();
+  const error = (code, message) => errors.push({code, message});
+  for (const shot of shots) {
+    if (shot.endFrame <= shot.startFrame) error('empty_frame_range', shot.id);
+  }
+  for (const cue of plan.edit.audio) {
+    if (audio.has(cue.id)) error('duplicate_audio_cue', cue.id);
+    audio.set(cue.id, cue);
+    const atom = plan.atoms.find(atom => atom.id === cue.atomId);
+    if (atom?.type !== 'narration' && !(atom?.type === 'provided_media' && atom.mediaType === 'audio')) error('invalid_audio_atom', cue.id);
+    if (atom?.type === 'narration' && cue.role !== 'narration') error('invalid_narration_role', cue.id);
+    if (cue.endFrame <= cue.startFrame || cue.endFrame > endFrame) error('audio_outside_timeline', cue.id);
+    const asset = plan.assets[cue.atomId];
+    if (asset && asset.mediaType !== 'audio') error('invalid_audio_asset', cue.id);
+    if (asset && !asset.durationSeconds) pending.push({code: 'unmeasured_audio', message: cue.id});
+    if (plan.timingBasis === 'aligned' && asset?.durationSeconds && cue.sourceInSeconds + (cue.endFrame - cue.startFrame) / plan.edit.fps > asset.durationSeconds + 1 / plan.edit.fps) error('audio_trim_outside_asset', cue.id);
+  }
+  for (const action of plan.edit.actions) {
+    if (actions.has(action.id)) error('duplicate_action_cue', action.id);
+    actions.add(action.id);
+    const shot = shots.find(shot => shot.id === action.shotId);
+    if (!shot || action.frame < shot.startFrame || action.frame >= shot.endFrame) error('action_outside_shot', action.id);
+    if (action.audioCueId) {
+      const cue = audio.get(action.audioCueId);
+      if (cue?.role !== 'sfx' || cue.startFrame !== action.frame) error('unsynced_action_audio', action.id);
+    }
+  }
+  return {errors, pending};
+}
+
+export async function prepareAssembly({planPath}) {
+  const {plan, root} = await loadPlan(planPath);
+  if (!plan.edit) throw new Error('Add an edit configuration before preparing assembly');
+  const validation = await validateDocument(plan, root);
+  if (!validation.valid) throw new Error('Fix the plan errors before preparing assembly: ' + JSON.stringify(validation.errors));
+  const {fps, width, height, audio, actions} = plan.edit;
+  const ranges = frameRanges(plan);
+  const used = usedAtoms(plan);
+  return {
+    schemaVersion: '1.0', planRevision: plan.revision, timingBasis: plan.timingBasis,
+    assemblyReady: validation.assemblyReady, pending: validation.pending, warnings: validation.warnings,
+    fps, width, height, durationInFrames: ranges.at(-1).endFrame,
+    shots: plan.shots.map((shot, index) => ({
+      ...shot, ...ranges[index],
+      motion: {...shot.motion, keyframes: shot.motion.keyframes.map(keyframe => ({...keyframe, frame: ranges[index].startFrame + Math.round(keyframe.offsetSeconds * fps)}))},
+    })),
+    captions: plan.captionCues.map(cue => ({...cue, startFrame: Math.round(cue.startSeconds * fps), endFrame: Math.round(cue.endSeconds * fps)})),
+    audio, actions,
+    assets: Object.fromEntries(Object.entries(plan.assets).filter(([id]) => used.has(id))),
+  };
 }
 
 export async function validatePlan(planPath) {
@@ -210,9 +292,12 @@ export async function inspectPlan(planPath) {
 function taskFor(atom, plan, root) {
   return {atomId: atom.id, type: atom.type, intent: atom, projectDir: root, guidance: plan.project, dependencyAssets: Object.fromEntries(dependencies(atom).map(id => [id, plan.assets[id]])), shots: plan.shots.filter(shot => shot.primaryAtomId === atom.id || shot.annotations.some(item => item.atomId === atom.id)), instructions: {
     stock_image: 'Search permitted stock sources, visually choose an exact result, then call produce with selections. Preserve provenance.',
-    stock_video: 'Choose an exact clip by visual inspection; provide selections to produce, then attach measured duration and resolved source trim for every shot.',
+    stock_video: 'Search stock first for ordinary B-roll or reactions. Choose by action, readability at the target crop and rights. Provide selections to produce, then record measured duration and exact trims.',
     generated_image: 'Use the exposed ChatGPT image-generation tool, preserving references and channel style. Call attach_asset with the resulting local file.',
-    generated_video: 'Use local LTX 2.5 with the resolved reference images. Produce a 3–8 second clip and attach measured duration. Never claim generation without an actual file.',
+    narration: 'Confirm the voice and commercial rights. Use produce with explicit narrationUse to synthesize through ElevenLabs, then align timing to the measured take.',
+    generated_video: atom.provider === 'google_flow'
+      ? 'Open the authorized Flow session, check compatible frame mode, duration, audio and credits. Use the attached image inputs and prompt. Inspect and attach the actual measured output; record source trim and audio mode.'
+      : 'Use local LTX 2.5 with the resolved reference images. Produce a 3–8 second clip and attach measured duration. Never claim generation without an actual file.',
     custom_component: 'Search and inspect permitted component registries for this visual purpose. Fetch useful references; build a frame-driven React component in the project. Attach its entry point, props, dependencies, and source references. A registry JSON is not a built component.',
     source_evidence: 'Find authoritative evidence for this claim, capture using available tools, preserve source URL and attribution, then attach the actual file.',
     provided_media: 'Attach the declared existing project file with its provenance.',
@@ -250,6 +335,7 @@ export async function revisePlan({planPath, draft, expectedRevision, invalidateA
       if (JSON.stringify(before) !== JSON.stringify(after) && !invalidated.has(id)) throw new Error(`Explicitly invalidate changed asset ${id} before revising its intent`);
       if (invalidated.has(id)) { delete plan.assets[id]; delete plan.production[id]; }
     }
+    if (!next.edit) delete plan.edit;
     Object.assign(plan, next);
     const report = await validateDocument(plan, root);
     if (report.errors.length) throw new Error(`Invalid revision: ${JSON.stringify(report.errors)}`);
@@ -261,7 +347,10 @@ export async function revisePlan({planPath, draft, expectedRevision, invalidateA
 function selectedAtoms(plan, shotIds) {
   if (!shotIds?.length) return usedAtoms(plan);
   for (const id of shotIds) if (!plan.shots.some(shot => shot.id === id)) throw new Error(`Unknown shot: ${id}`);
-  return usedAtoms({...plan, shots: plan.shots.filter(shot => shotIds.includes(shot.id))});
+  if (!plan.edit) return usedAtoms({...plan, shots: plan.shots.filter(shot => shotIds.includes(shot.id))});
+  const frames = frameRanges(plan).filter(shot => shotIds.includes(shot.id));
+  const audio = plan.edit.audio.filter(cue => frames.some(shot => cue.startFrame < shot.endFrame && cue.endFrame > shot.startFrame));
+  return usedAtoms({...plan, edit: {...plan.edit, audio}, shots: plan.shots.filter(shot => shotIds.includes(shot.id))});
 }
 
 async function ltxConfig() {
@@ -302,9 +391,10 @@ async function materialize(root, atom, input) {
   const metadata = await fileMetadata(await projectPath(root, parsed.path, true));
   if (parsed.sha256 && parsed.sha256 !== metadata.sha256) throw new Error('Asset hash does not match file');
   Object.assign(parsed, metadata);
-  const expected = {stock_image: 'image', stock_video: 'video', generated_image: 'image', generated_video: 'video', custom_component: 'component', image_sequence: 'sequence', provided_media: atom.mediaType};
+  const expected = {stock_image: 'image', stock_video: 'video', generated_image: 'image', generated_video: 'video', narration: 'audio', custom_component: 'component', image_sequence: 'sequence', provided_media: atom.mediaType};
   if (expected[atom.type] && parsed.mediaType !== expected[atom.type]) throw new Error(`Expected ${expected[atom.type]} asset for ${atom.id}`);
-  if (atom.type === 'generated_video' && (!parsed.durationSeconds || parsed.durationSeconds < 3 || parsed.durationSeconds > 8 || Math.abs(parsed.durationSeconds - atom.durationSeconds) > 0.1)) throw new Error('Generated video duration must match planned duration within 0.1s and stay within 3–8s');
+  if (atom.type === 'generated_video' && !parsed.durationSeconds) throw new Error('Generated video must include measured duration');
+  if (atom.type === 'generated_video' && atom.provider === 'local_ltx_2_5' && (!parsed.durationSeconds || parsed.durationSeconds < 3 || parsed.durationSeconds > 8 || Math.abs(parsed.durationSeconds - atom.durationSeconds) > 0.1)) throw new Error('Generated video duration must match planned duration within 0.1s and stay within 3–8s');
   if (atom.type === 'custom_component' && (!parsed.component || !/\.[cm]?[jt]sx?$/.test(parsed.path))) throw new Error('A built JS/TS component and frame-driven component contract are required');
   if (atom.type === 'source_evidence' && !parsed.provenance.sourceUrl) throw new Error('Evidence needs an original source URL');
   if (atom.type === 'image_sequence' && JSON.stringify(parsed.sequenceAtomIds) !== JSON.stringify(atom.referenceAtomIds)) throw new Error('Sequence must preserve the planned image order');
@@ -346,7 +436,7 @@ export async function attachAsset({planPath, atomId, asset, sourceFile, shotUpda
   });
 }
 
-export async function produce({planPath, shotIds, selections = {}}) {
+export async function produce({planPath, shotIds, selections = {}, narrationUse}) {
   return locked(planPath, async () => {
     const {plan, root, file} = await loadPlan(planPath), previous = structuredClone(plan);
     const validation = await validateDocument(plan, root);
@@ -393,7 +483,9 @@ export async function produce({planPath, shotIds, selections = {}}) {
           try { await writeFile(target, content, {flag: 'wx'}); }
           catch (error) { if (error.code !== 'EEXIST') throw error; if (await readFile(target, 'utf8') !== content) throw new Error('Sequence file differs; choose a new asset path for this revision'); }
           asset = {path, mediaType: 'sequence', sequenceAtomIds: atom.referenceAtomIds, provenance: {provider: 'scenesupply', rightsStatus: 'review-required', notes: 'Sequence inherits underlying image provenance.'}};
-        } else if (atom.type === 'generated_video' && ltx) {
+        } else if (atom.type === 'narration' && narrationUse) {
+          asset = await produceNarration(root, atom, directory, narrationUse);
+        } else if (atom.type === 'generated_video' && atom.provider === 'local_ltx_2_5' && ltx) {
           const result = await runLtx(ltx, task, directory);
           asset = await materialize(root, atom, result);
         }

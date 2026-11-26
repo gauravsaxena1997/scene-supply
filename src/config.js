@@ -6,6 +6,7 @@ export const CREDENTIAL_NAMES = {
   pexels: 'PEXELS_API_KEY',
   pixabay: 'PIXABAY_API_KEY',
   coverr: 'COVERR_API_KEY',
+  elevenlabs: 'ELEVENLABS_API_KEY',
   'tailark-quartz': 'TAILARK_API_KEY',
 };
 

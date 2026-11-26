@@ -30,7 +30,8 @@
               "custom_component",
               "source_evidence",
               "provided_media",
-              "image_sequence"
+              "image_sequence",
+              "narration"
             ]
           },
           "additionalProperties": {
@@ -362,7 +363,10 @@
               },
               "provider": {
                 "type": "string",
-                "const": "local_ltx_2_5"
+                "enum": [
+                  "local_ltx_2_5",
+                  "google_flow"
+                ]
               },
               "referenceAtomIds": {
                 "minItems": 1,
@@ -378,12 +382,32 @@
               },
               "durationSeconds": {
                 "type": "number",
-                "minimum": 3,
-                "maximum": 8
+                "exclusiveMinimum": 0
               },
               "camera": {
                 "type": "string",
                 "minLength": 1
+              },
+              "flow": {
+                "type": "object",
+                "properties": {
+                  "purpose": {
+                    "type": "string",
+                    "enum": [
+                      "b_roll",
+                      "silent_reaction",
+                      "spoken_dialogue"
+                    ]
+                  },
+                  "dialogue": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "purpose"
+                ],
+                "additionalProperties": false
               }
             },
             "required": [
@@ -396,6 +420,59 @@
               "prompt",
               "durationSeconds",
               "camera"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]*$"
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1
+              },
+              "brandRuleRefs": {
+                "default": [],
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "type": {
+                "type": "string",
+                "const": "narration"
+              },
+              "provider": {
+                "type": "string",
+                "const": "elevenlabs"
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 5000
+              },
+              "voiceId": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]*$"
+              },
+              "modelId": {
+                "default": "eleven_multilingual_v2",
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]*$"
+              }
+            },
+            "required": [
+              "id",
+              "description",
+              "brandRuleRefs",
+              "type",
+              "provider",
+              "text",
+              "voiceId",
+              "modelId"
             ],
             "additionalProperties": false
           },
@@ -942,6 +1019,140 @@
         "type": "string"
       }
     },
+    "edit": {
+      "type": "object",
+      "properties": {
+        "width": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "height": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "fps": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 120
+        },
+        "audio": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]*$"
+              },
+              "atomId": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]*$"
+              },
+              "role": {
+                "type": "string",
+                "enum": [
+                  "narration",
+                  "music",
+                  "sfx",
+                  "ambience"
+                ]
+              },
+              "startFrame": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "endFrame": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "sourceInSeconds": {
+                "default": 0,
+                "type": "number",
+                "minimum": 0
+              },
+              "gain": {
+                "default": 1,
+                "type": "number",
+                "minimum": 0,
+                "maximum": 2
+              }
+            },
+            "required": [
+              "id",
+              "atomId",
+              "role",
+              "startFrame",
+              "endFrame",
+              "sourceInSeconds",
+              "gain"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "actions": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]*$"
+              },
+              "shotId": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]*$"
+              },
+              "frame": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "tap",
+                  "type",
+                  "reveal",
+                  "confirm",
+                  "hold",
+                  "custom"
+                ]
+              },
+              "target": {
+                "type": "string",
+                "minLength": 1
+              },
+              "audioCueId": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]*$"
+              }
+            },
+            "required": [
+              "id",
+              "shotId",
+              "frame",
+              "kind",
+              "target"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "width",
+        "height",
+        "fps",
+        "audio",
+        "actions"
+      ],
+      "additionalProperties": false
+    },
     "schemaVersion": {
       "type": "string",
       "const": "1.0"
@@ -985,7 +1196,8 @@
               "custom_component",
               "source_evidence",
               "provided_media",
-              "image_sequence"
+              "image_sequence",
+              "narration"
             ]
           }
         },

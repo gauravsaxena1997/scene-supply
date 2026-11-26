@@ -2,24 +2,34 @@
 
 SceneSupply is a local, project-agnostic visual planning and asset production toolkit. It reads the consuming project's channel guidance, saves a script-mapped visual plan, produces assets through direct adapters and agent tools, and attaches their paths/provenance to that same plan. It searches Pexels, Pixabay, Coverr and the Tailark OSS, Eldora UI, Cult UI, KokonutUI, and Magic UI component registries.
 
-This is a CLI, JavaScript package, and local MCP server. The agent makes creative shot decisions and operates image-generation/coding/capture tools; SceneSupply supplies schemas, guidance, source integrations, resumable production and asset registration. Remotion assembly and final rendering are planned for a later release.
+This is a CLI, JavaScript package, and local MCP server. The agent makes creative shot decisions and operates image-generation/coding/capture tools; SceneSupply supplies schemas, guidance, source integrations, resumable production and asset registration. SceneSupply emits the timed assembly manifest for a project-owned Remotion composition.
 
 ## Requirements
 
 - Node.js 20 or newer.
-- Your own API keys for whichever stock providers you use.
+- Your own API keys for the stock or narration providers you use. The setup check and sample plan run without keys.
+- FFmpeg's `ffprobe` on your PATH if you generate ElevenLabs narration through SceneSupply.
 - Rights review for each selected media asset and component before publication or redistribution.
 
 ## Install for use from any project
 
-From a checkout of this repository:
+Clone this repository, or download and extract the source archive from a release:
+
+```sh
+git clone https://github.com/gauravsaxena1997/scene-supply.git
+cd scene-supply
+npm ci
+node src/cli.js doctor
+```
+
+For a ZIP download, start with `npm ci` inside the extracted folder. To make the commands available from other projects:
 
 ```sh
 npm link
 scenesupply doctor
 ```
 
-`npm link` makes `scenesupply` available in any terminal project on that machine. You may also import the package from JavaScript. No project-specific configuration is required.
+You can also skip `npm link` and run `node /path/to/scene-supply/src/cli.js` with the same arguments, or import the package from JavaScript.
 
 For Codex, register its MCP server once at user level:
 
@@ -27,11 +37,25 @@ For Codex, register its MCP server once at user level:
 codex mcp add scenesupply -- scenesupply-mcp
 ```
 
-The server uses the same user-level credentials as the CLI, so consuming projects need no separate key setup. After upgrading, reconnect the MCP client to reload the tool list. Configuration alone does not prove tool exposure in the active conversation.
+Without `npm link`, register `codex mcp add scenesupply -- node /absolute/path/to/scene-supply/src/mcp.js`. Substitute the actual path and quote it if it contains spaces. For another MCP client, use the same command and arguments with stdio transport. The MCP client starts the process locally on connection. The CLI and MCP server use the same user-level credentials. Reconnect after upgrades and check that `get_workflow_guidance` appears in the active session.
+
+### Try the sample without provider keys
+
+From the SceneSupply checkout, run these commands in a POSIX shell. Use a fresh folder for each run because plan creation preserves existing files.
+
+```sh
+demo="$(mktemp -d)"
+cp examples/script.md "$demo/script.md"
+node src/cli.js plan --project "$demo" --script script.md --draft examples/draft.json --automatic --allow-generic-style
+node src/cli.js inspect-plan --plan "$demo/visual-plan.json"
+node src/cli.js validate-plan --plan "$demo/visual-plan.json"
+```
+
+This demonstrates the planning contract. Asset readiness still requires real media and verified trims.
 
 ## Plan, produce, and attach
 
-Each channel/project stays in its own folder. Optional `.scenesupply/project.json` declares guidanceFiles, allowedAtoms, default composition, styles and narrator references; see [project example](examples/project.json). Existing AGENTS.md and common brand-guidelines files are also discovered. Credentials remain at machine level.
+Each channel/project stays in its own folder. Optional `.scenesupply/project.json` declares `guidanceFiles`, a `personalizationFile` for feedback and taste cases, allowed atoms, default composition, styles and narrator references. Paths are relative to the consuming project. See the [project example](examples/project.json). Existing AGENTS.md and common brand-guidelines files are also discovered. Credentials remain at machine level.
 
 Main MCP tools:
 
@@ -115,10 +139,11 @@ Reusable agent instruction:
 scenesupply auth set pexels
 scenesupply auth set pixabay
 scenesupply auth set coverr
+scenesupply auth set elevenlabs
 scenesupply doctor
 ```
 
-The command reads each key through hidden terminal input. It saves keys in `~/.config/scenesupply/credentials.json` (or `$XDG_CONFIG_HOME/scenesupply/credentials.json`) with owner-only file permissions. This is a **local plaintext credential file**, outside this Git repository. An environment variable (`PEXELS_API_KEY`, `PIXABAY_API_KEY`, or `COVERR_API_KEY`) takes precedence and can be supplied by your existing secret manager. Do not put tokens in arguments, project files, or commits.
+The command reads each key through hidden terminal input. It saves keys in `~/.config/scenesupply/credentials.json` (or `$XDG_CONFIG_HOME/scenesupply/credentials.json`) with owner-only file permissions. This is a **local plaintext credential file**, outside this Git repository. An environment variable (`PEXELS_API_KEY`, `PIXABAY_API_KEY`, `COVERR_API_KEY`, or `ELEVENLABS_API_KEY`) takes precedence and can be supplied by your existing secret manager. Do not put tokens in arguments, project files, or commits.
 
 Coverr also offers an [MCP endpoint](https://coverr.co/developers), and several component sources offer MCP servers. SceneSupply uses their direct APIs or public registries so the CLI works from any folder without per-project MCP setup. Your coding agent can additionally connect its own MCP servers once at user level.
 
@@ -151,6 +176,10 @@ If you have a Tailark Quartz plan, run `scenesupply auth set tailark-quartz` onc
 
 ## Use from an agent
 
+Copy this prompt into an agent with shell access or a connected SceneSupply MCP server:
+
+> Use SceneSupply for the script and project folder I provide. If SceneSupply MCP is available, call `get_workflow_guidance` and `read_project_context`. Otherwise use the CLI equivalents `scenesupply guidance` and `scenesupply context --project <folder>`. If neither is available and you can run a shell, clone the official SceneSupply repo (or use the release archive), install dependencies with `npm ci`, and run `node <checkout>/src/cli.js doctor` before using that CLI. Resolve the project's guidance and taste cases before planning. Map each shot to the actual narration or script, save the editable plan, and produce only the assets in scope. Attach actual files, check their provenance and trims, then run plan validation. Open the project's Remotion preview if asked. Report unresolved assets and checks. Wait for my request before exporting or publishing.
+
 From any local project, ask your agent to call the `scenesupply` CLI. For example:
 
 > Search Pexels, Pixabay, and Coverr for a rainy city street. Show the source pages and creators. Download the selected clip into this project's assets folder and keep its provenance record.
@@ -159,9 +188,21 @@ From any local project, ask your agent to call the `scenesupply` CLI. For exampl
 
 The CLI returns JSON, including per-source errors. It will not silently pretend an unavailable provider was searched.
 
+## Optional local cleanup for Google Flow clips
+
+Download the video CLI for Windows x64, Linux x64, or macOS from the official [VeoWatermarkRemover releases](https://github.com/allenk/VeoWatermarkRemover/releases). The upstream video CLI is a preview. We verified version 0.6.4 on macOS. Download and extract the matching archive, then run the executable locally. On Windows, use `GeminiWatermarkTool-Video.exe`.
+
+```sh
+./GeminiWatermarkTool-Video --veo -i "flow-original.mp4" -o "flow-cleaned.mp4"
+```
+
+Keep the original and its generation provenance. Check the cleaned corner, runtime, frame count, and audio before attaching the cleaned copy as the editing asset. Use the cleanup step for footage you have permission to edit. SceneSupply does not install or run this tool automatically.
+
 ## Scope
 
-Current: channel-context snapshots, atom/shot schemas, agent-assisted planning and asset production. Later: narrator/audio production and Remotion assembly/rendering. No generate-video render tool is included in this release.
+Current: channel and personalization snapshots, editable shot/audio/action contracts, stock and agent-assisted assets, opt-in ElevenLabs narration and Remotion assembly manifests. Google Flow remains an agent/browser handoff. Final rendering is owned by the consuming project.
+
+See the [shared production SOP](knowledge/planning-and-production.md) and [agent skill](skills/scenesupply-production/SKILL.md).
 
 ## Reference and licences
 

@@ -19,7 +19,8 @@
         "custom_component",
         "source_evidence",
         "provided_media",
-        "image_sequence"
+        "image_sequence",
+        "narration"
       ],
       "minItems": 1,
       "type": "array",
@@ -33,7 +34,8 @@
           "custom_component",
           "source_evidence",
           "provided_media",
-          "image_sequence"
+          "image_sequence",
+          "narration"
         ]
       }
     },
@@ -65,7 +67,8 @@
               "custom_component",
               "source_evidence",
               "provided_media",
-              "image_sequence"
+              "image_sequence",
+              "narration"
             ]
           },
           "additionalProperties": {
@@ -107,6 +110,10 @@
       "additionalProperties": {
         "$ref": "#/$defs/__schema0"
       }
+    },
+    "personalizationFile": {
+      "type": "string",
+      "minLength": 1
     }
   },
   "required": [

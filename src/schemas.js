@@ -1,6 +1,6 @@
 import {z} from 'zod';
 
-export const ATOM_TYPES = ['stock_image', 'stock_video', 'generated_image', 'generated_video', 'custom_component', 'source_evidence', 'provided_media', 'image_sequence'];
+export const ATOM_TYPES = ['stock_image', 'stock_video', 'generated_image', 'generated_video', 'custom_component', 'source_evidence', 'provided_media', 'image_sequence', 'narration'];
 export const PUBLIC_COMPONENT_SOURCES = ['tailark', 'eldora', 'cult', 'kokonut', 'magicui'];
 const id = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/);
 export const relativePath = z.string().min(1).refine(value => !value.startsWith('/') && !value.includes('\\') && !value.split('/').some(part => ['..', '.', ''].includes(part)), 'Use a project-relative path without traversal');
@@ -20,6 +20,7 @@ export const projectConfigSchema = z.object({
   composition: compositionSchema.optional(),
   styles: jsonObject.default({}),
   narrator: jsonObject.optional(),
+  personalizationFile: relativePath.optional(),
 }).strict();
 
 export const motionSchema = z.object({
@@ -35,7 +36,8 @@ export const atomSchema = z.discriminatedUnion('type', [
   z.object({...common, type: z.literal('stock_image'), query: z.string().min(1), providers: sources, selectionCriteria: z.string().min(1), selection: stockSelection.optional()}).strict(),
   z.object({...common, type: z.literal('stock_video'), query: z.string().min(1), providers: sources, selectionCriteria: z.string().min(1), selection: stockSelection.optional()}).strict(),
   z.object({...common, type: z.literal('generated_image'), provider: z.literal('chatgpt_imagegen'), prompt: z.string().min(1), referenceAtomIds: z.array(id).default([]), continuity: z.string().min(1)}).strict(),
-  z.object({...common, type: z.literal('generated_video'), provider: z.literal('local_ltx_2_5'), referenceAtomIds: z.array(id).min(1), prompt: z.string().min(1), durationSeconds: z.number().min(3).max(8), camera: z.string().min(1)}).strict(),
+  z.object({...common, type: z.literal('generated_video'), provider: z.enum(['local_ltx_2_5', 'google_flow']), referenceAtomIds: z.array(id).min(1), prompt: z.string().min(1), durationSeconds: z.number().positive(), camera: z.string().min(1), flow: z.object({purpose: z.enum(['b_roll', 'silent_reaction', 'spoken_dialogue']), dialogue: z.string().min(1).optional()}).strict().optional()}).strict(),
+  z.object({...common, type: z.literal('narration'), provider: z.literal('elevenlabs'), text: z.string().min(1).max(5000), voiceId: id, modelId: id.default('eleven_multilingual_v2')}).strict(),
   z.object({...common, type: z.literal('custom_component'), purpose: z.string().min(1), content: jsonObject, layout: z.string().min(1), animation: z.string().min(1), registrySources: z.array(z.enum(PUBLIC_COMPONENT_SOURCES)).min(1).default(PUBLIC_COMPONENT_SOURCES)}).strict(),
   z.object({...common, type: z.literal('source_evidence'), claim: z.string().min(1), query: z.string().min(1), sourceUrl: z.string().url().optional(), capture: z.enum(['screenshot', 'recording', 'image', 'excerpt'])}).strict(),
   z.object({...common, type: z.literal('provided_media'), path: relativePath, mediaType: z.enum(['image', 'video', 'audio']), usage: z.string().min(1)}).strict(),
@@ -68,12 +70,29 @@ export const shotSchema = z.object({
   playback: playbackSchema.optional(),
 }).strict();
 
+export const editSchema = z.object({
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+  fps: z.number().int().positive().max(120),
+  audio: z.array(z.object({
+    id, atomId: id, role: z.enum(['narration', 'music', 'sfx', 'ambience']),
+    startFrame: z.number().int().nonnegative(), endFrame: z.number().int().positive(),
+    sourceInSeconds: z.number().nonnegative().default(0),
+    gain: z.number().min(0).max(2).default(1),
+  }).strict()).default([]),
+  actions: z.array(z.object({
+    id, shotId: id, frame: z.number().int().nonnegative(), kind: z.enum(['tap', 'type', 'reveal', 'confirm', 'hold', 'custom']),
+    target: z.string().min(1), audioCueId: id.optional(),
+  }).strict()).default([]),
+}).strict();
+
 export const draftSchema = z.object({
   composition: compositionSchema,
   atoms: z.array(atomSchema).min(1), shots: z.array(shotSchema).min(1),
   timingBasis: z.enum(['estimated', 'aligned']).default('estimated'),
   captionCues: z.array(z.object({id, startSeconds: z.number().nonnegative(), endSeconds: z.number().positive(), text: z.string().min(1)}).strict()).default([]),
   unresolved: z.array(z.string()).default([]),
+  edit: editSchema.optional(),
 }).strict();
 
 export const planSchema = draftSchema.safeExtend({
@@ -87,5 +106,5 @@ export const planSchema = draftSchema.safeExtend({
 });
 
 export function getSchemas() {
-  return Object.fromEntries(Object.entries({project: projectConfigSchema, draft: draftSchema, plan: planSchema, asset: assetSchema}).map(([name, schema]) => [name, z.toJSONSchema(schema)]));
+  return Object.fromEntries(Object.entries({project: projectConfigSchema, draft: draftSchema, plan: planSchema, asset: assetSchema, edit: editSchema}).map(([name, schema]) => [name, z.toJSONSchema(schema)]));
 }

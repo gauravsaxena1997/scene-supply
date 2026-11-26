@@ -35,6 +35,7 @@ export async function readProjectContext(projectDir) {
   const configText = await optionalFile(await projectPath(root, '.scenesupply/project.json'));
   const config = projectConfigSchema.parse(configText ? JSON.parse(configText) : {});
   const files = new Set(config.guidanceFiles);
+  if (config.personalizationFile) files.add(config.personalizationFile);
   for (const name of ['AGENTS.md', 'brand-guidelines.md', 'brand.md', 'BRAND.md', 'guidelines/brand.md']) {
     if (await optionalFile(await projectPath(root, name))) files.add(name);
   }
